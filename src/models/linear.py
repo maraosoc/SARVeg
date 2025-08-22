@@ -5,29 +5,21 @@
 # ------------------------------------------------------------
 
 from __future__ import annotations
-import pathlib
+
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Tuple
 
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 
-# Gráficos más estéticos
-plt.style.use("seaborn-v0_8-whitegrid")
-# Aumentar el tamaño de la letra
-plt.rcParams.update({"font.size": 12})
-plt.rcParams.update({"font.family": 'serif'})
-# Cambiar paleta de colores
-plt.set_cmap("Paired")
-
-from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LinearRegression, Ridge, Lasso
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+
+from utils.model_prep import ensure_outdir
+from utils.evaluation import evaluate_regression, plot_diagnostics
 
 
 # ------------------------ Configuración ------------------------
@@ -45,51 +37,6 @@ class BaselineConfig:
     # Si quieres guardar artefactos:
     outdir: str = "./artifacts_linear_baseline"
 
-# ------------------------ Utilidades ------------------------
-
-def ensure_outdir(path: str) -> pathlib.Path:
-    p = pathlib.Path(path)
-    p.mkdir(parents=True, exist_ok=True)
-    return p
-
-def load_dataset(path: str) -> pd.DataFrame:
-    """Carga un CSV a DataFrame, infiere NA y limpia columnas de espacio."""
-    df = pd.read_csv(path)
-    df.columns = [c.strip() for c in df.columns]
-    return df
-
-def select_xy(
-    df: pd.DataFrame,
-    target_col: Optional[List[str]] = None,
-    feature_cols: Optional[List[str]] = None
-) -> Tuple[pd.DataFrame, pd.Series]:
-    """Separa X e y. Si feature_cols es None, usa todas salvo la y."""
-    if feature_cols is None:
-        feature_cols = [c for c in df.columns if c != target_col]
-    X = df[feature_cols].copy()
-    y = df[target_col].copy()
-    return X, y
-
-def random_splits(
-    X: pd.DataFrame,
-    y: pd.Series,
-    val_size: float,
-    random_state: int
-) -> Dict[str, Tuple[pd.DataFrame, pd.Series]]:
-    """
-    Genera splits aleatorios: train/val/test. Primero separa test,
-    luego sobre train crea validación. Reproducible por semilla.
-    """
-    # Validación es una fracción del train_full
-    X_train, X_val, y_train, y_val = train_test_split(
-        X, y,
-        test_size=val_size,
-        random_state=random_state
-    )
-    return {
-        "train": (X_train, y_train),
-        "val":   (X_val,   y_val),
-    }
 
 def build_preprocessor(num_features: List[str]) -> ColumnTransformer:
     """
@@ -122,54 +69,17 @@ def build_pipeline(pre: ColumnTransformer, model) -> Pipeline:
     """Crea el Pipeline sklearn: preprocesamiento + modelo."""
     return Pipeline(steps=[("pre", pre), ("model", model)])
 
-def evaluate_regression(
-    y_true: np.ndarray, y_pred: np.ndarray
-) -> Dict[str, float]:
-    """Calcula métricas estándar."""
-    rmse = float(np.sqrt(mean_squared_error(y_true, y_pred)))
-    mae  = float(mean_absolute_error(y_true, y_pred))
-    r2   = float(r2_score(y_true, y_pred))
-    # rRMSE (%) relativo a la media de la verdad terreno
-    rrmse = float(100.0 * rmse / np.mean(np.abs(y_true)))
-    return {"RMSE": rmse, "MAE": mae, "R2": r2, "rRMSE(%)": rrmse}
-
-def plot_diagnostics(y_true: np.ndarray, y_pred: np.ndarray, outdir: pathlib.Path, split_name: str):
-    """Gráficos sencillos: y_pred vs y_true y residuales."""
-    # y_pred vs y_true
-    plt.figure()
-    plt.scatter(y_true, y_pred, alpha=0.7, color='darkslategrey')
-    lims = [min(y_true.min(), y_pred.min()), max(y_true.max(), y_pred.max())]
-    plt.plot(lims, lims, color='darkslategrey')  # línea identidad
-    plt.xlabel("Observed")
-    plt.ylabel("Estimated")
-    plt.title(f"Estimated vs Observed ({split_name})")
-    # Agregar leyenda con valor de R2
-    plt.legend(handles=[], title=f"R2: {r2_score(y_true, y_pred):.2f}", loc="upper left", frameon=True, facecolor='white', edgecolor='black')
-    plt.tight_layout()
-    plt.savefig(outdir / f"scatter_{split_name}.png", dpi=200)
-    plt.close()
-
-    # Residuales
-    residuals = y_true - y_pred
-    plt.figure()
-    plt.scatter(y_pred, residuals, alpha=0.7, color='darkslategrey')
-    plt.axhline(0, linestyle="--", color='darkslategrey')
-    plt.xlabel("Estimated")
-    plt.ylabel("Residual (y - ŷ)")
-    plt.title(f"Residuals Diagnostic ({split_name})")
-    plt.tight_layout()
-    plt.savefig(outdir / f"residuals_{split_name}.png", dpi=200)
-    plt.close()
-
 def run_baseline_from_splits(
-    X_train, y_train,
-    X_val, y_val,
-    target,
-    num_features,
-    model_type="ridge",
-    alpha=1.0,
-    outdir="./artifacts_linear_baseline"
-):
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    X_val: Optional[pd.DataFrame] = None,
+    y_val: Optional[pd.Series] = None,
+    target: Optional[str] = None,
+    num_features: Optional[List[str]] = None,
+    model_type: str = "ridge",
+    alpha: float = 1.0,
+    outdir: str = "./artifacts_linear_baseline"
+) -> Dict[str, Dict[str, float]]:
     """
     Ejecuta la línea base de regresión lineal/Ridge/Lasso usando conjuntos
     ya preparados de entrenamiento, validación y prueba.
@@ -218,8 +128,8 @@ def run_baseline_from_splits(
     }
 
     # 7) Gráficos diagnósticos
-    plot_diagnostics(y_train.values, yhat_train, outdir, f'train {target} {model_type}')
-    plot_diagnostics(y_val.values,   yhat_val,   outdir, f'val {target} {model_type}')
+    plot_diagnostics(y_train.values, yhat_train, outdir, f'train set - {model_type}', target)
+    plot_diagnostics(y_val.values,   yhat_val,   outdir, f'val set - {model_type}', target)
 
     # 8) Coeficientes
     try:
@@ -260,7 +170,7 @@ if __name__ == "__main__":
         alpha=1.0,
         outdir="./artifacts_linear_baseline"
     )
-    m = run_baseline(cfg)
+    m = run_baseline_from_splits(cfg)
     print("Métricas (RMSE, MAE, R2, rRMSE%) por split:")
     for split, d in m.items():
         print(split, d)

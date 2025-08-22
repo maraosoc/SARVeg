@@ -1,6 +1,13 @@
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
+# Gráficos más estéticos
+plt.style.use("seaborn-v0_8-whitegrid")
+# Cambiar estilo de la letra
+plt.rcParams.update({"font.family": 'serif'})
+plt.rcParams.update({'font.size': 12})
+# Cambiar paleta de colores
+plt.set_cmap("Paired")
 
 from sklearn.decomposition import PCA
 import pandas as pd
@@ -53,7 +60,7 @@ def boxplot_variability_by_coverage(df: pd.DataFrame, coverage_col: str, target_
     # Generar boxplots por cada variable
     for target in target_cols:
         plt.figure(figsize=figsize)
-        sns.boxplot(x='Cover Type', y=target, data=df)
+        sns.boxplot(x='Cover Type', y=target, data=df, color='darkslategrey')
         plt.title(f'Boxplot of {target} by cover type')
         plt.xlabel('Cover Type')
         plt.ylabel(target)
@@ -82,11 +89,11 @@ def lineplot_variability_by_date(df: pd.DataFrame, date_col: str, target_cols: l
         if coverage_col:
             # Si hay cobertura, graficar líneas separadas por tipo de cobertura
             sns.lineplot(x='Mes', y=target, data=df, hue='Tipo de cobertura', marker='o')
-            plt.legend(title='Cover Type', loc='center left')
+            plt.legend(title='Cover Type', loc='center left', frameon=True, facecolor='white', edgecolor='black')
             plt.title(f'Variability of {target} by cover type and date')
         else:
             # Si no hay cobertura, graficar una única línea (promediando todas las coberturas)
-            sns.lineplot(x='Mes', y=target, data=df, marker='o')
+            sns.lineplot(x='Mes', y=target, data=df, marker='o', color='darkslategrey')
             plt.title(f'Variability of {target} by date (averaged)')
 
         plt.xlabel('Date')

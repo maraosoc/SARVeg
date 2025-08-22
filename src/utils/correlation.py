@@ -1,6 +1,13 @@
 from scipy.stats import spearmanr, pearsonr
 import pandas as pd
 import matplotlib.pyplot as plt
+# Gráficos más estéticos
+plt.style.use("seaborn-v0_8-whitegrid")
+# Cambiar estilo de la letra
+plt.rcParams.update({"font.family": 'serif'})
+plt.rcParams.update({'font.size': 12})
+# Cambiar paleta de colores
+plt.set_cmap("Paired")
 import seaborn as sns
 ## Función para calcular correlaciones de Pearson y Spearman
 def calculate_correlations(df: pd.DataFrame, target_cols: list, sar_cols: list):
@@ -41,3 +48,21 @@ def plot_correlation_matrix(corr_df: pd.DataFrame, method='pearson', figsize=(10
     plt.title(f'{method.capitalize()} correlation matrix')
     plt.show()
 
+def corr_selection(df_corr, umbral=0.4):
+    """
+    Selecciona variables SAR con correlación absoluta > umbral
+    para todas las variables de pasto (filas).
+    
+    Parámetros:
+        df_corr: DataFrame de correlaciones (filas = pasto, columnas = SAR)
+        umbral: valor mínimo de correlación absoluta
+        
+    Retorna:
+        Lista de variables SAR que cumplen el criterio en al menos una variable de pasto.
+    """
+    # Para cada columna SAR, verifica si alguna correlación en las filas es > umbral
+    sar_seleccionadas = [
+        col for col in df_corr.columns
+        if (df_corr[col].abs() > umbral).any()
+    ]
+    return sar_seleccionadas
