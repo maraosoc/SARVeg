@@ -3,7 +3,6 @@ import re
 import pandas as pd
 from typing import List, Optional, Tuple, Dict
 
-
 def _normalize_date_tag(s: str) -> str:
     """Quita separadores no alfanuméricos para facilitar el parseo del sufijo de fecha."""
     if s is None:
@@ -288,20 +287,6 @@ La función es robusta a sufijos de fecha en columnas SAR como 19Feb2025, 19_Feb
 Reestructura SAR de ancho→largo, parsea el sufijo a fecha calendario y luego pivot a (Punto, Fecha) para unir con pastos.
 
 """
-import pandas as pd
-# Cargar datos SAR
-df_sar = pd.read_csv(r'D:\Universidad\MsC\thesis\SARVeg\data\pre-processed\SAR_values.csv')
-df_citrics = pd.read_excel(r'D:\Universidad\MsC\thesis\SARVeg\data\pre-processed\TreeBiomass.xlsx')
-df_citrics['datetime'] = pd.to_datetime(df_citrics['date']) + pd.to_timedelta(df_citrics['time'])
-df_SARcitric, debug = align_grass_with_sar(
-    df_grass=df_citrics,      
-    df_sar=df_sar,       
-    grass_point_col="id_point",     
-    grass_datetime_col="datetime",
-    sar_point_col="id_point",
-    nearest_day_tolerance=pd.Timedelta(days=2)
-)
-print("Debug info:", debug)
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -438,7 +423,7 @@ def plot_correlation_matrix(corr_df: pd.DataFrame, method='pearson', figsize=(10
     plt.show()
 
 ## Función para graficar pairplots
-def plot_pairplot(df: pd.DataFrame, cols: list):
+def plot_correlation_matrix(df: pd.DataFrame, cols: list):
     """
     Grafica un pairplot para explorar visualmente las relaciones entre variables.
     """
