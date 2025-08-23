@@ -1,3 +1,4 @@
+from __future__ import annotations
 # baseline_nadaraya_watson.py
 # ------------------------------------------------------------
 # Nadaraya–Watson multivariado (statsmodels.KernelReg) con:
@@ -6,76 +7,38 @@
 # - Métricas y gráficos similares a la regresión lineal base
 # - Reutiliza splits externos: X_train/X_val/X_test, y_*
 # ------------------------------------------------------------
+from dataclasses import dataclass
 
-from __future__ import annotations
 import pathlib
-from typing import List, Dict, Tuple, Iterable
+from typing import List, Dict, Tuple, Iterable, Optional
 
-import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
+import numpy as np
 
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
 from sklearn.base import BaseEstimator, RegressorMixin
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from sklearn.metrics import mean_squared_error
 
 from statsmodels.nonparametric.kernel_regression import KernelReg
 
-# Gráficos más estéticos
-plt.style.use("seaborn-v0_8-whitegrid")
-# Tamaño y tipo de letra
-plt.rcParams.update({"font.size": 12})
-plt.rcParams.update({"font.family": 'serif'})
-# Cambiar paleta de colores
-plt.set_cmap("Paired")
+from utils.model_prep import ensure_outdir
+from utils.evaluation import evaluate_regression, plot_diagnostics, plot_risk_curve
 
+# ------------------------ Configuración ---------------------
+@dataclass
+class NWConfig:
+    target_col: str                         # Columna objetivo (p.ej. 'biomasa')
+    feature_cols: Optional[List[str]] = None# Si None, usa todas menos target
+    random_state: int = 42                  # Semilla reproducible
+    # Rejilla de bandwidth h (si None, se usa np.logspace(-2, 1, 30))
+    bandwidth_grid: Optional[Iterable[float]] = None
+    reg_type: str = "lc"                    # "lc" local constant, "ll" local linear
+    # Si quieres guardar artefactos:
+    outdir: str = "./artifacts_nadaraya-watson"
 
-# ------------------------ Utilidades compartidas ------------------------
-
-def ensure_outdir(path: str) -> pathlib.Path:
-    p = pathlib.Path(path)
-    p.mkdir(parents=True, exist_ok=True)
-    return p
-
-def evaluate_regression(y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, float]:
-    """Métricas estándar (coherentes con la línea base)."""
-    rmse = float(np.sqrt(mean_squared_error(y_true, y_pred)))
-    mae  = float(mean_absolute_error(y_true, y_pred))
-    r2   = float(r2_score(y_true, y_pred))
-    rrmse = float(100.0 * rmse / np.mean(np.abs(y_true)))
-    return {"RMSE": rmse, "MAE": mae, "R2": r2, "rRMSE(%)": rrmse}
-
-def plot_diagnostics(y_true: np.ndarray, y_pred: np.ndarray, outdir: pathlib.Path, split_name: str):
-    """Gráficos: predicho-vs-observado y residuales."""
-    # Scatter predicho vs observado
-    plt.figure()
-    plt.scatter(y_true, y_pred, alpha=0.7, color='darkslategrey')
-    lims = [min(y_true.min(), y_pred.min()), max(y_true.max(), y_pred.max())]
-    plt.plot(lims, lims)
-    plt.plot(lims, lims, color='darkslategrey')  # línea identidad
-    plt.xlabel("Observed")
-    plt.ylabel("Estimated")
-    plt.title(f"Estimated vs Observed ({split_name})")
-    # Agregar leyenda con valor de R2
-    plt.legend(handles=[], title=f"R2: {r2_score(y_true, y_pred):.2f}", loc="upper left", frameon=True, facecolor='white', edgecolor='black')
-    plt.tight_layout()
-    plt.savefig(outdir / f"scatter_{split_name}.png", dpi=200)
-    plt.close()
-
-    # Residuales
-    residuals = y_true - y_pred
-    plt.figure()
-    plt.scatter(y_pred, residuals, alpha=0.7, color='darkslategrey')
-    plt.axhline(0, linestyle="--", color='darkslategrey')
-    plt.xlabel("Estimated")
-    plt.ylabel("Residual (y - ŷ)")
-    plt.title(f"Residuals Diagnostic ({split_name})")
-    plt.tight_layout()
-    plt.savefig(outdir / f"residuals_{split_name}.png", dpi=200)
-    plt.close()
 
 def build_preprocessor(num_features: List[str]) -> ColumnTransformer:
     """Imputación + escalado para todas las variables numéricas."""
@@ -144,24 +107,8 @@ def evaluate_bandwidth_on_val(
     model = NWRegressor(bandwidth=h, reg_type=reg_type)
     model.fit(Xtr, y_train.values)
     yhat_val = model.predict(Xva)
-    rmse = np.sqrt(mean_squared_error(y_val.values, yhat_val)) # tambien puede ser RMSE agregando np.sqrt
+    rmse = np.sqrt(mean_squared_error(y_val.values, yhat_val)) 
     return float(rmse)
-
-
-def plot_risk_curve(df_risk: pd.DataFrame, best_h: float, target_col: str, outdir: pathlib.Path):
-    """Gráfico RMSE_LOO vs h (escala log en h)."""
-    plt.figure()
-    plt.plot(df_risk["h"], df_risk["RMSE_LOO"], lw=1.8, color='darkslategrey')
-    plt.axvline(best_h, linestyle="--", color='darkslategrey')
-    # Agregar una leyenda con el mejor h
-    plt.legend(handles=[], title=f"Best h: {best_h:.2e}", loc="center left", frameon=True, facecolor='white', edgecolor='black')
-    plt.xscale("log")
-    plt.xlabel("h (Bandwidth)")
-    plt.ylabel("Mean error (Risk)")
-    plt.title(f"Estimated risk vs h ({target_col})")
-    plt.tight_layout()
-    plt.savefig(outdir / f"nw_risk_vs_h_{target_col}.png", dpi=200)
-    plt.close()
 
 
 # ------------------------ Funciones auxiliares para Leave-One-Out ------------------------
@@ -225,28 +172,30 @@ def optimize_bandwidth_loo(
     return best_h, df_risk
 
 
-
 # ------------------------ Runner principal (desde splits) ------------------------
 
 def run_nw_from_splits(
-    X_train, y_train,
-    X_val,   y_val,
-    target_col,
-    num_features,
-    bandwidth_grid=None,
-    reg_type="lc",
-    outdir="./artifacts_nw"
-):
+    X_train: pd.DataFrame, y_train: pd.Series,
+    X_val: Optional[pd.DataFrame]=None, y_val: Optional[pd.Series]=None,
+    target_col: Optional[str] = None,
+    num_features:  Optional[List[str]] = None,
+    bandwidth_grid: Optional[np.ndarray] = None,
+    reg_type: str = "lc",
+    outdir: str = "./artifacts_nw"
+) -> Dict[str, Dict[str, float]]:
+    """
+    Ejecuta Nadaraya-Watson con splits ya preparados de entrenamiento y validación.
+    """
     outdir = ensure_outdir(outdir)
 
     if bandwidth_grid is None:
         # Rejilla por defecto razonable tras StandardScaler
         bandwidth_grid = np.logspace(-2, 1, 30)
 
-    # 1) Preprocesador (igual que antes)
+    # 1) Preprocesador 
     pre = build_preprocessor(num_features)
 
-    # 2) **Optimización LOO en TRAIN**  ← NUEVO
+    # 2) Optimización LOO en TRAIN
     best_h, df_risk = optimize_bandwidth_loo(
         pre=pre,
         X_train_df=X_train,
@@ -265,11 +214,11 @@ def run_nw_from_splits(
     Xtr = pre_fit.transform(X_train)
     Xva = pre_fit.transform(X_val)
 
-    # 4) Entrenar modelo final con statsmodels (misma API que antes)
+    # 4) Entrenar modelo final con statsmodels
     model = NWRegressor(bandwidth=best_h, reg_type=reg_type)
     model.fit(Xtr, y_train.values)
 
-    # 5) Predicciones y métricas como antes
+    # 5) Predicciones y métricas
     yhat_train = model.predict(Xtr)
     yhat_val   = model.predict(Xva)
 
@@ -277,11 +226,11 @@ def run_nw_from_splits(
         "train": evaluate_regression(y_train.values, yhat_train),
         "val":   evaluate_regression(y_val.values,   yhat_val),
     }
-    pd.DataFrame(metrics).to_csv(outdir / f"nw_metrics_{target_col}.csv")
+    pd.DataFrame(metrics).to_csv(outdir / f"metrics_{target_col} NW.csv")
 
     # 6) Gráficos diagnósticos (idénticos)
-    plot_diagnostics(y_train.values, yhat_train, outdir, f"train {target_col} NW")
-    plot_diagnostics(y_val.values,   yhat_val,   outdir, f"val {target_col} NW")
+    plot_diagnostics(y_train.values, yhat_train, outdir, f"train set - NW", target_col)
+    plot_diagnostics(y_val.values,   yhat_val,   outdir, f"val set - NW", target_col)
 
     return metrics
 
@@ -292,36 +241,14 @@ if __name__ == "__main__":
     # Ejemplo (debes preparar estos objetos fuera, reusando los splits del proyecto):
     # X_train, y_train, X_val, y_val, X_test, y_test, num_features = ...
     # Aquí se muestra cómo llamar a la función con una rejilla de h personalizada.
-    pass
-"""
-from baseline_linear import select_xy, random_splits, load_dataset
-data_path = r'C:\Users\Usuario\OneDrive\20211021_Int_Datafusion\20240118_MSc_MR_Datafusion\Processing\Sentinel\notebooks\outputs\selected_variables_for_modeling.csv'
-out_dir = r'C:\Users\Usuario\OneDrive\20211021_Int_Datafusion\20240118_MSc_MR_Datafusion\Processing\Sentinel\notebooks\outputs\artifacts_nadaraya_watson_baseline'
-df = load_dataset(data_path)
-df.head()
+    cfg = NWConfig(      
+        target_col="biomass", 
+        bandwidth_grid=np.logspace(-2, 1, 30), # Rejilla de h
+        reg_type="lc",                         # Tipo de regresión local (constante o lineal
+        outdir="./artifacts_nadaraya-watson"   # Directorio de salida
+    )
+    m = run_nw_from_splits(cfg)
+    print("Métricas (RMSE, MAE, R2, rRMSE%) por split:")
+    for split_name, metrics in m.items():
+        print(split_name, metrics)
 
-# Definir las columnas de características y objetivo
-target_col = 'total_biomass'
-feature_cols = ['Sigma0_RATIO_VH_VV', 'Gamma0_RATIO_VH_VV', 'PC4', 'Alpha']
-
-X, y = select_xy(df, target_col, feature_cols)
-num_features = list(X.columns)
-
-# Dividir en conjuntos de prueba y validacion
-splits = random_splits(X, y, val_size=0.2, random_state=42)
-(X_train, y_train) = splits["train"]
-(X_val,   y_val)   = splits["val"]
-
-# Definir el ancho de banda
-bandwidth_grid = np.logspace(-3, 1, 50) # para total_biomass
-# Ejecutar
-metrics = run_nw_from_splits(
-    X_train, y_train,
-    X_val, y_val,
-    target_col=target_col,
-    num_features=num_features,
-    bandwidth_grid=bandwidth_grid,
-    reg_type="lc",
-    outdir=out_dir
-)
-"""

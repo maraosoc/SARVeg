@@ -3,7 +3,8 @@
 # LightGBM Regressor con optimización de hiperparámetros
 # Usando conjuntos de entrenamiento y validación ya listos.
 # ------------------------------------------------------------
-
+from __future__ import annotations
+from dataclasses import dataclass
 import pathlib
 import numpy as np
 import pandas as pd
@@ -16,51 +17,23 @@ from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
+from utils.model_prep import ensure_outdir
+from utils.evaluation import evaluate_regression, plot_diagnostics
+
 import lightgbm as lgb
 
-# ------------------------ Utilidades compartidas ------------------------
+# ------------------------ Configuración ------------------------
+@dataclass
+class LGBMConfig:
+    X_train: pd.DataFrame  # Conjunto de entrenamiento
+    y_train: pd.Series      # Objetivo de entrenamiento
+    X_val: pd.DataFrame      # Conjunto de validación
+    y_val: pd.Series        # Objetivo de validación
+    target_col: str                         # Columna objetivo (p.ej. 'biomasa')
+    param_dist: Optional[Dict[str, list]] = None  # Parámetros de búsqueda para RandomizedSearchCV
+    num_features: List[str] = None  # Características numéricas
+    outdir: str = "./artifacts_lgbm"  # Directorio de salida
 
-def ensure_outdir(path: str) -> pathlib.Path:
-    p = pathlib.Path(path)
-    p.mkdir(parents=True, exist_ok=True)
-    return p
-
-def evaluate_regression(y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, float]:
-    """Métricas estándar (coherentes con la línea base)."""
-    rmse = float(np.sqrt(mean_squared_error(y_true, y_pred)))
-    mae  = float(mean_absolute_error(y_true, y_pred))
-    r2   = float(r2_score(y_true, y_pred))
-    rrmse = float(100.0 * rmse / np.mean(np.abs(y_true)))
-    return {"RMSE": rmse, "MAE": mae, "R2": r2, "rRMSE(%)": rrmse}
-
-def plot_diagnostics(y_true: np.ndarray, y_pred: np.ndarray, outdir: pathlib.Path, split_name: str):
-    """Gráficos: predicho-vs-observado y residuales."""
-    # Scatter predicho vs observado
-    plt.figure()
-    plt.scatter(y_true, y_pred, alpha=0.7, color='darkslategrey')
-    lims = [min(y_true.min(), y_pred.min()), max(y_true.max(), y_pred.max())]
-    plt.plot(lims, lims)
-    plt.plot(lims, lims, color='darkslategrey')  # línea identidad
-    plt.xlabel("Observed")
-    plt.ylabel("Estimated")
-    plt.title(f"Estimated vs Observed ({split_name})")
-    # Agregar leyenda con valor de R2
-    plt.legend(handles=[], title=f"$R^2$: {r2_score(y_true, y_pred):.2f}", loc="upper left", frameon=True, facecolor='white', edgecolor='black')
-    plt.tight_layout()
-    plt.savefig(outdir / f"scatter_{split_name}.png", dpi=200)
-    plt.close()
-
-    # Residuales
-    residuals = y_true - y_pred
-    plt.figure()
-    plt.scatter(y_pred, residuals, alpha=0.7, color='darkslategrey')
-    plt.axhline(0, linestyle="--", color='darkslategrey')
-    plt.xlabel("Estimated")
-    plt.ylabel("Residual (y - ŷ)")
-    plt.title(f"Residuals Diagnostic ({split_name})")
-    plt.tight_layout()
-    plt.savefig(outdir / f"residuals_{split_name}.png", dpi=200)
-    plt.close()
 
 def build_preprocessor(num_features: List[str]) -> ColumnTransformer:
     """Imputación + escalado para todas las variables numéricas."""
@@ -173,11 +146,11 @@ def run_lgbm_from_splits(
         "train": evaluate_regression(y_train.values, yhat_train),
         "val":   evaluate_regression(y_val.values,   yhat_val)
     }
-    pd.DataFrame(metrics).to_csv(outdir / f"lgbm_metricas_{target_col}.csv")
+    pd.DataFrame(metrics).to_csv(outdir / f"metrics_{target_col} LightGBM.csv")
 
     # 6) Gráficos diagnósticos (idénticos)
-    plot_diagnostics(y_train.values, yhat_train, outdir, f"train {target_col} LGBM")
-    plot_diagnostics(y_val.values,   yhat_val,   outdir, f"val {target_col} LGBM")
+    plot_diagnostics(y_train.values, yhat_train, outdir, f"train set - LGBM",  target_col)
+    plot_diagnostics(y_val.values,   yhat_val,   outdir, f"val set - LGBM", target_col)
 
     # 7) Importancia de características
     feature_importances = lgbm_best.feature_importances_
@@ -189,7 +162,9 @@ def run_lgbm_from_splits(
 
     # 8) Guardar el modelo entrenado
     import joblib
-    joblib.dump(lgbm_best, outdir / f"lgbm_best_model_{target_col}.pkl")
+    dir_pkl = pathlib.Path(outdir) / "pkl"
+    dir_pkl.mkdir(parents=True, exist_ok=True)
+    joblib.dump(lgbm_best, dir_pkl / f"lgbm_best_model_{target_col}.pkl")
 
     return metrics
 
@@ -197,42 +172,19 @@ def run_lgbm_from_splits(
 # ------------------------ Ejemplo de uso ------------------------
 if __name__ == "__main__":
     # Diccionario de parámetros para LightGBM
-    pass
-
-from baseline_linear import select_xy, random_splits, load_dataset
-data_path = r'C:\Users\Usuario\OneDrive\20211021_Int_Datafusion\20240118_MSc_MR_Datafusion\Processing\Sentinel\notebooks\outputs\selected_variables_for_modeling.csv'
-out_dir = r'C:\Users\Usuario\OneDrive\20211021_Int_Datafusion\20240118_MSc_MR_Datafusion\Processing\Sentinel\notebooks\outputs\artifacts_lightgbm_baseline'
-df = load_dataset(data_path)
-df.head()
-
-# Definir las columnas de características y objetivo
-target_col = ['VWC', 'total_biomass', 'IBA']
-feature_cols = ['Sigma0_RATIO_VH_VV', 'Gamma0_RATIO_VH_VV', 'PC4', 'Alpha']
-
-X, y = select_xy(df, target_col, feature_cols)
-num_features = list(X.columns)
-
-# Dividir en conjuntos de prueba y validacion
-splits = random_splits(X, y, val_size=0.2, random_state=42)
-(X_train, y_train) = splits["train"]
-(X_val,   y_val)   = splits["val"]
-
-# Diccionario de parámetros de búsqueda (el usuario puede personalizarlo)
-param_dist = {
-    "n_estimators": np.arange(100, 1500, 100),  # Puedes probar desde 100 hasta 1500 árboles
-    "max_depth": [None, 10, 20, 30, 40, 50],  # Profundidad del árbol
-    "min_samples_split": np.arange(2, 21, 2),  # Mínimo de muestras para dividir un nodo
-    "min_samples_leaf": np.arange(1, 21, 2),  # Mínimo de muestras para ser hoja
-    "max_features": ["auto", "sqrt", "log2"],  # Número de features a probar
-    "bootstrap": [True, False]  # Usar muestras con reemplazo o no
-}
-
-# Llamar la funcion principal
-for target in target_col:
-    metrics_rf = run_lgbm_from_splits(
-        X_train, y_train[target], X_val, y_val[target],
-        target,
-        param_dist,
-        num_features=num_features,
-        outdir=out_dir
+    cfg = LGBMConfig(
+        X_train=None,
+        y_train=None,
+        X_val=None,
+        y_val=None,
+        target_col="biomass",  # Cambia según tu caso
+        param_dist=None,  # Puedes definir tu rejilla de hiperparámetros
+        num_features=None,  # Lista de características numéricas
+        outdir="./artifacts_rf_example"  # Directorio de salida
     )
+    # Llama a la función principal
+    m = run_lgbm_from_splits(cfg)
+    print("Métricas (RMSE, MAE, R2, rRMSE%) por split:")
+    for split_name, metrics in m.items():
+        print(split_name, metrics)
+

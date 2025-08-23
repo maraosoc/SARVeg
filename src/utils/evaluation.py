@@ -4,6 +4,7 @@ from typing import List, Optional, Dict, Tuple
 import pathlib
 from pathlib import Path
 import matplotlib.pyplot as plt
+import pandas as pd
 # Gráficos más estéticos
 plt.style.use("seaborn-v0_8-whitegrid")
 # Cambiar estilo de la letra
@@ -54,4 +55,22 @@ def plot_diagnostics(y_true: np.ndarray, y_pred: np.ndarray, outdir: pathlib.Pat
     plt.title(f"Residuals Diagnostic ({split_name})")
     plt.tight_layout()
     plt.savefig(png_dir / f"residuals_{target} {split_name}.png", format='png', dpi=200)
+    plt.close()
+
+# Grafica de riesgo para NW
+def plot_risk_curve(df_risk: pd.DataFrame, best_h: float, target_col: str, outdir: pathlib.Path):
+    """Gráfico RMSE_LOO vs h (escala log en h)."""
+    png_dir = Path(outdir) / "png"
+    png_dir.mkdir(parents=True, exist_ok=True)
+    plt.figure()
+    plt.plot(df_risk["h"], df_risk["RMSE_LOO"], lw=1.8, color='darkslategrey')
+    plt.axvline(best_h, linestyle="--", color='darkslategrey')
+    # Agregar una leyenda con el mejor h
+    plt.legend(handles=[], title=f"Best h: {best_h:.2e}", loc="center left", frameon=True, facecolor='white', edgecolor='black')
+    plt.xscale("log")
+    plt.xlabel("h (Bandwidth)")
+    plt.ylabel("Mean error (Risk)")
+    plt.title(f"Estimated risk vs h ({target_col})")
+    plt.tight_layout()
+    plt.savefig(png_dir / f"nw_risk_vs_h_{target_col}.png", dpi=200)
     plt.close()
