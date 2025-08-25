@@ -74,3 +74,84 @@ def plot_risk_curve(df_risk: pd.DataFrame, best_h: float, target_col: str, outdi
     plt.tight_layout()
     plt.savefig(png_dir / f"nw_risk_vs_h_{target_col}.png", dpi=200)
     plt.close()
+
+
+def gather_model_metrics(base_dir: str, grass_variables=None, model_folders=None) -> pd.DataFrame:
+    """
+    Forma un DataFrame con las métricas de todos los modelos y variables de pasto.
+
+    Parámetros
+    ----------
+    base_dir : str
+        Directorio base que contiene las carpetas de salida de los modelos.
+    grass_variables : list of str
+        Lista de variables vegetativas a filtrar. Por defecto:
+        ['VWC', 'IBA', 'total_biomass'].
+
+    Retorna
+    -------
+    pd.DataFrame
+        DataFrame largo con columnas:
+        ['model', 'target', 'metric', 'set', 'value']
+    """
+    if grass_variables is None:
+        grass_variables = ['VWC', 'IBA', 'total_biomass']
+
+    # Carpeta base
+    base_path = Path(base_dir)
+
+    # Carpetas de modelos
+    if model_folders is None:
+        model_folders = {
+            'Linear Regression': 'artifacts_linear',
+            'Nadaraya-Watson': 'artifacts_nadaraya_watson',
+            'Random Forest': 'artifacts_rf',
+            'LightGBM': 'artifacts_lgbm'
+        }
+
+    records = []
+
+    # Recorrer cada modelo
+    for model_name, folder in model_folders.items():
+        folder_path = base_path / folder
+        if not folder_path.exists():
+            continue
+
+        # Buscar archivos .csv que contengan 'metric' y alguna variable de pasto
+        for csv_file in folder_path.glob("*.csv"):
+            # Convertimos a minúsculas para comparación
+            fname = csv_file.name.lower()
+            if 'metric' not in fname:
+                continue
+            if not any(var.lower() in fname for var in grass_variables):
+                continue
+
+            # Leer CSV
+            try:
+                df = pd.read_csv(csv_file, index_col=0)
+            except Exception as e:
+                print(f"Error leyendo {csv_file}: {e}")
+                continue
+
+            # Verificar que contenga columnas 'train' y 'val'
+            if not {'train', 'val'}.issubset(df.columns):
+                continue
+
+            # Recorrer métricas y conjuntos
+            for metric_name, row in df.iterrows():
+                for dataset in ['train', 'val']:
+                    value = row[dataset]
+                    # Agregar registro
+                    records.append({
+                        'model': model_name,
+                        'target': next((var for var in grass_variables if var.lower() in fname), 'Unknown'),
+                        'metric': metric_name,
+                        'set': dataset,
+                        'value': float(value)
+                    })
+
+    # Crear DataFrame
+    df_long = pd.DataFrame(records)
+    # Ordenar
+    df_long = df_long[['model', 'target', 'metric', 'set', 'value']]
+    return df_long
