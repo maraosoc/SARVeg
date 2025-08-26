@@ -39,7 +39,7 @@ def plot_pca_variance(pca: PCA, figsize=(8, 5)):
     plt.show()
 
 # Función para Random Forest Feature Importance
-def rf_feature_importance(X: np.ndarray, y: np.ndarray, sar_cols: list, target_cols: list, n_estimators: int = 500, random_state: int = 42):
+def rf_feature_importance(X: np.ndarray, y: np.ndarray, sar_cols: list, target_cols: list, n_estimators: int = 500, random_state: int = 42, figsize=(10, 5), save_path=None, format='png', resolution=200):
     """
     Calcula la importancia de las variables SAR usando Random Forest para cada variable de pasto.
     Grafica la importancia relativa.
@@ -52,11 +52,21 @@ def rf_feature_importance(X: np.ndarray, y: np.ndarray, sar_cols: list, target_c
         importance_dict[target] = importance
 
         # Gráfico
-        plt.figure(figsize=(10,5))
-        sns.barplot(x=importance.values, y=importance.index)
-        plt.title(f'RF importance for {target}')
-        plt.xlabel('Relative Importance')
-        plt.ylabel('SAR Variable')
-        plt.show()
+        plt.figure(figsize=figsize)
+        sns.barplot(x=importance.values, y=importance.index, color='darkslategrey')
+        plt.title(f'RF importance for {target}', fontsize=16)
+        plt.xlabel('Relative Importance', fontsize=14)
+        plt.ylabel('SAR Variable', fontsize=14)
+        plt.xticks(fontsize=12)
+        #plt.savefig(f'{save_path}/{target}_RF_importance.{format}', bbox_inches='tight', format=format)
+        if save_path:
+            if format == 'png':
+                plt.savefig(f'{save_path}/RF_importance_{target}.{format}', bbox_inches='tight', format=format, dpi=resolution)
+                plt.show()
+            else:
+                plt.savefig(f'{save_path}/RF_importance_{target}.{format}', bbox_inches='tight', format=format)
+                plt.show()
+        else:
+            plt.show()
     
     return importance_dict

@@ -39,14 +39,23 @@ def plot_correlation_bars(corr_df: pd.DataFrame, title: str, figsize=(14, 8)):
     plt.show()
 
 ## Función para graficar matrices de correlación
-def plot_correlation_matrix(corr_df: pd.DataFrame, method='pearson', figsize=(10, 10)):
+def plot_correlation_matrix(corr_df: pd.DataFrame, method='pearson', figsize=(10, 10), save_path=None, format='png', resolution=200):
     """
     Grafica la matriz de correlación como un mapa de calor.
+    Si save_path se especifica, guarda la figura en ese archivo.
     """
     plt.figure(figsize=figsize)
     sns.heatmap(corr_df.astype(float), annot=True, cmap="coolwarm", center=0, vmin=-1, vmax=1, fmt=".2f", cbar=True)
     plt.title(f'{method.capitalize()} correlation matrix')
-    plt.show()
+    if save_path:
+        if format == 'png':
+            plt.savefig(f'{save_path}/{method}_correlation_matrix.{format}', bbox_inches='tight', format=format, dpi=resolution)
+            plt.show()
+        else:
+            plt.savefig(f'{save_path}/{method}_correlation_matrix.{format}', bbox_inches='tight', format=format)
+            plt.show()
+    else:
+        plt.show()
 
 def corr_selection(df_corr, umbral=0.4):
     """
