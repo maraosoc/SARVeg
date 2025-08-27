@@ -223,9 +223,9 @@ def predict_vegetation_map(
             vv = vv_dates[d]
             vh = np.where(np.isfinite(vh), vh, np.nan)
             vv = np.where(np.isfinite(vv), vv, np.nan)
-            if metric == 'SUM_VHVV':
+            if metric == 'sum_vhvv':
                 val = vh + vv
-            elif metric == 'RATIO_VH_VV':
+            elif metric == 'ratio_vh_vv':
                 with np.errstate(divide='ignore', invalid='ignore'):
                     val = vh / vv
             else:
@@ -270,7 +270,8 @@ def predict_vegetation_map(
         if len(layers) == 0:
             return None
         return _temporal_mean(layers)
-
+    #transform to lower case the feature names
+    feature_list = [f.lower() for f in feature_list]
     # Build features in the exact order given
     for feat in feature_list:
         key = feat.strip()
@@ -284,13 +285,10 @@ def predict_vegetation_map(
         elif kLOW in ('sigma0_vv','sigma0_vh','gamma0_vv','gamma0_vh'):
             prod, pol = key.split('_')
             fmap = _mean_intensity(prod, pol)
-        elif kLOW in ('sum_vhvv','ratio_vh_vv'):
-            # Allow using these as features too, if you trained that way
-            # Compute from Sigma0 by default. If you need Gamma0, change here or add an argument.
-            if kLOW == 'sum_vhvv':
-                fmap = _mean_cross_metric('Sigma0', 'SUM_VHVV')
-            else:
-                fmap = _mean_cross_metric('Sigma0', 'RATIO_VH_VV')
+        elif kLOW in ('sigma0_sum_vhvv','sigma0_ratio_vh_vv', 'gamma0_sum_vhvv', 'gamma0_ratio_vh_vv'):
+            # Detecta el product y metrica según el token solicitado
+            prod, met = key.split('_')
+            fmap = _mean_cross_metric(prod.capitalize(), met.upper())
         else:
             raise ValueError(f"Unknown feature token: {key}")
 
@@ -371,3 +369,94 @@ def predict_vegetation_map(
         'figure': fig,
         'model_path': model_path
     }
+
+if __name__ == "__main__":
+    print("Iniciando script de predicción de mapas...")
+    # Definir las configuracones
+    raster_folder = r'C:\Users\mramoso\Documents\SARVeg\data\raw\SAR'
+    pkl_folder = r'C:\Users\mramoso\Documents\SARVeg\results\canopy\artifacts_rf\pkl'
+    out_tif = r'C:\Users\mramoso\Documents\SARVeg\results\maps\Predicted_tree_height.tif'  # Añadido r para raw string
+    from utils.model_prep import ensure_outdir
+    ensure_outdir(os.path.dirname(out_tif))
+    print(f"Configuración completada. Salida: {out_tif}")
+    print("Ejecutando predicción...")
+    # Diccionarios de los nombres de las bandas
+    dprvi_band_dict = {
+        'Banda 01': 'dpRVI_19Feb2025',
+        'Banda 02': 'dpRVI_15Mar2025',
+        'Banda 03': 'dpRVI_08Apr2025',
+        'Banda 04': 'dpRVI_26May2025',
+        'Banda 05': 'dpRVI_19Jun2025'
+    }
+
+    haalpha_band_dict = {
+        'Banda 01': 'Entropy_19Feb2025',
+        'Banda 02': 'Anisotropy_19Feb2025',
+        'Banda 03': 'Alpha_19Feb2025',
+        'Banda 04': 'Entropy_15Mar2025',
+        'Banda 05': 'Anisotropy_15Mar2025',
+        'Banda 06': 'Alpha_15Mar2025',
+        'Banda 07': 'Entropy_08Apr2025',
+        'Banda 08': 'Anisotropy_08Apr2025',
+        'Banda 09': 'Alpha_08Apr2025',
+        'Banda 10': 'Entropy_26May2025',
+        'Banda 11': 'Anisotropy_26May2025',
+        'Banda 12': 'Alpha_26May2025',
+        'Banda 13': 'Entropy_19Jun2025',
+        'Banda 14': 'Anisotropy_19Jun2025',
+        'Banda 15': 'Alpha_19Jun2025'
+    }
+
+    intensity_band_dict = {
+        'Banda 01': 'Sigma0_VH_19Feb2025',
+        'Banda 02': 'Sigma0_VV_19Feb2025',
+        'Banda 03': 'Gamma0_VH_19Feb2025',
+        'Banda 04': 'Gamma0_VV_19Feb2025',
+        'Banda 05': 'Sigma0_VH_15Mar2025',
+        'Banda 06': 'Sigma0_VV_15Mar2025',
+        'Banda 07': 'Gamma0_VH_15Mar2025',
+        'Banda 08': 'Gamma0_VV_15Mar2025',
+        'Banda 09': 'Sigma0_VH_08Apr2025',
+        'Banda 10': 'Sigma0_VV_08Apr2025',
+        'Banda 11': 'Gamma0_VH_08Apr2025',
+        'Banda 12': 'Gamma0_VV_08Apr2025',
+        'Banda 13': 'Sigma0_VH_26May2025',
+        'Banda 14': 'Sigma0_VV_26May2025',
+        'Banda 15': 'Gamma0_VH_26May2025',
+        'Banda 16': 'Gamma0_VV_26May2025',
+        'Banda 17': 'Sigma0_VH_19Jun2025',
+        'Banda 18': 'Sigma0_VV_19Jun2025',
+        'Banda 19': 'Gamma0_VH_19Jun2025',
+        'Banda 20': 'Gamma0_VV_19Jun2025',
+    }
+    m = predict_vegetation_map(
+        target_variable = 'tree_height',
+        feature_list = ['Sigma0_RATIO_VH_VV', 'Gamma0_RATIO_VH_VV'],  # Solo usar features disponibles por ahora
+        raster_folder = raster_folder,
+        pkl_folder = pkl_folder,
+        output_tif = out_tif,  # Usar la variable con ruta completa
+        # band dictionaries: {'Banda 01': 'Sigma0_IW1_VH_mst_19Feb2025', ...}
+        intensity_band_dict = intensity_band_dict,
+        dprvi_band_dict = dprvi_band_dict,
+        haalpha_band_dict = haalpha_band_dict,
+        # file names inside raster_folder
+        intensity_filename = 'intensities.tif',
+        dprvi_filename = 'dprvi.tif',
+        haalpha_filename = 'haalpha.tif',
+        # plotting
+        fig_title = None,
+        cmap = 'viridis',
+        nodata_value = -9999.0
+    )
+    
+    print("Script execution completed!")
+    print(f"Output file should be at: {out_tif}")
+    print(f"Output file exists: {os.path.exists(out_tif)}")
+    if os.path.exists(out_tif):
+        print(f"File size: {os.path.getsize(out_tif)} bytes")
+    else:
+        print("Checking for any errors in the directory...")
+        import glob
+        maps_dir = os.path.dirname(out_tif)
+        print(f"Files in maps directory: {os.listdir(maps_dir)}")
+        print(f"Looking for any .tif files: {glob.glob(os.path.join(maps_dir, '*.tif'))}")
