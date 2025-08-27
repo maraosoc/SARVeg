@@ -153,37 +153,57 @@ def predict_canopy_from_ratios(
 
     # 9) Gráfica con ejes en CRS nativo + colorbar
     left, bottom, right, top = rasterio.transform.array_bounds(H, W, transform)
-    fig = plt.figure(figsize=(7.5, 7))
+    fig = plt.figure(figsize=(7.5, 6))
     ax = plt.gca()
     im = ax.imshow(pred_map, extent=[left, right, bottom, top], origin='upper', cmap=cmap)
     cb = plt.colorbar(im, ax=ax, shrink=0.85)
-    cb.set_label(f'Predicted {target_variable}')
+    cb.set_label(f'Predicted {target_variable} [kg/$m^3$]')
     ax.set_xlabel(f'X ({crs})')
     ax.set_ylabel(f'Y ({crs})')
-    ax.set_title(fig_title or f'{target_variable} prediction (Sigma0/Gamma0 VH/VV ratios)')
+    # redondear ejes
+    ax.set_xticklabels(np.round(ax.get_xticks(), 3), rotation=45)
+    ax.set_yticklabels(np.round(ax.get_yticks(), 3))
+    ax.set_title(fig_title or f'{target_variable} prediction map')
     plt.tight_layout()
+    plt.savefig(output_tif.replace('.tif', '.pdf'), format='pdf')
 
     src.close()
     return {'prediction': pred_map, 'profile': out_profile, 'figure': fig, 'model_path': model_path}
 
-# Diccionario de nombres de banda (ejemplo; usa el tuyo real):
+# Diccionario de nombres de banda
 intensity_band_dict = {
-    'Banda 01': 'Sigma0_IW1_VH_mst_19Feb2025',
-    'Banda 02': 'Sigma0_IW1_VV_mst_19Feb2025',
-    'Banda 03': 'Gamma0_IW1_VH_mst_19Feb2025',
-    'Banda 04': 'Gamma0_IW1_VV_mst_19Feb2025',
-    # ... resto de fechas ...
-    'Banda 19': 'Gamma0_IW1_VH_slv15_19Jun2025',
-    'Banda 20': 'Gamma0_IW1_VV_slv16_19Jun2025'
-}
+        'Banda 01': 'Sigma0_VH_19Feb2025',
+        'Banda 02': 'Sigma0_VV_19Feb2025',
+        'Banda 03': 'Gamma0_VH_19Feb2025',
+        'Banda 04': 'Gamma0_VV_19Feb2025',
+        'Banda 05': 'Sigma0_VH_15Mar2025',
+        'Banda 06': 'Sigma0_VV_15Mar2025',
+        'Banda 07': 'Gamma0_VH_15Mar2025',
+        'Banda 08': 'Gamma0_VV_15Mar2025',
+        'Banda 09': 'Sigma0_VH_08Apr2025',
+        'Banda 10': 'Sigma0_VV_08Apr2025',
+        'Banda 11': 'Gamma0_VH_08Apr2025',
+        'Banda 12': 'Gamma0_VV_08Apr2025',
+        'Banda 13': 'Sigma0_VH_26May2025',
+        'Banda 14': 'Sigma0_VV_26May2025',
+        'Banda 15': 'Gamma0_VH_26May2025',
+        'Banda 16': 'Gamma0_VV_26May2025',
+        'Banda 17': 'Sigma0_VH_19Jun2025',
+        'Banda 18': 'Sigma0_VV_19Jun2025',
+        'Banda 19': 'Gamma0_VH_19Jun2025',
+        'Banda 20': 'Gamma0_VV_19Jun2025',
+    }
 
+raster_folder = r'C:\Users\mramoso\Documents\SARVeg\data\raw\SAR\intensities.tif'
+pkl_folder = r'C:\Users\mramoso\Documents\SARVeg\results\canopy\artifacts_rf\pkl'
+out_tif = r'C:\Users\mramoso\Documents\SARVeg\results\maps\Predicted_biomass.tif'
 res = predict_canopy_from_ratios(
-    target_variable='CanopyWater' ,                 # texto que aparece en el nombre del .pkl
-    intensity_raster_path='rasters/batch_intensity.tif',
+    target_variable='biomass',                 # texto que aparece en el nombre del .pkl
+    intensity_raster_path=raster_folder,
     intensity_band_dict=intensity_band_dict,
-    pkl_folder='best_models/',                      # carpeta con los .pkl
-    output_tif='Pred_CanopyWater.tif',
-    fig_title='Canopy Water prediction'
+    pkl_folder=pkl_folder,                      # carpeta con los .pkl
+    output_tif=out_tif,
+    fig_title='Biomass prediction map'
 )
 
-# res['figure'] es la figura; 'Pred_CanopyWater.tif' se abre en QGIS.
+# res['figure'] es la figura; 'Predicted_biomass.tif' se abre en QGIS.
