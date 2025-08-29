@@ -128,7 +128,9 @@ def predict_canopy_from_ratios(
 
     # 5) Tabla X (Npix × 2) en el orden requerido
     X = feat_stack[:, finite_mask].T  # columnas: [Sigma0_RATIO_VH_VV, Gamma0_RATIO_VH_VV]
-
+    # Convertir a X en un dataframe con las columnas adecuadas solo cuando se usa Nadaraya-Watson
+    #import pandas as pd
+    #X = pd.DataFrame(X, columns=["Sigma0_RATIO_VH_VV", "Gamma0_RATIO_VH_VV"])
     # 6) Localizar modelo .pkl: nombre que contenga target_variable (case-insensitive)
     pattern = os.path.join(pkl_folder, "*.pkl")
     candidates = [p for p in glob.glob(pattern) if re.search(re.escape(target_variable), os.path.basename(p), flags=re.IGNORECASE)]
@@ -195,15 +197,15 @@ intensity_band_dict = {
     }
 
 raster_folder = r'C:\Users\mramoso\Documents\SARVeg\data\raw\SAR\intensities.tif'
-pkl_folder = r'C:\Users\mramoso\Documents\SARVeg\results\canopy\artifacts_lgbm\pkl'
-out_tif = r'C:\Users\mramoso\Documents\SARVeg\results\maps\Predicted_biomass_LGBM.tif'
+pkl_folder = r'C:\Users\mramoso\Documents\SARVeg\results\canopy\artifacts_nadaraya-watson\pkl'
+out_tif = r'C:\Users\mramoso\Documents\SARVeg\results\maps\Predicted_tree_height_NW.tif'
 res = predict_canopy_from_ratios(
-    target_variable='biomass',                 # texto que aparece en el nombre del .pkl
+    target_variable='tree_height',                 # texto que aparece en el nombre del .pkl
     intensity_raster_path=raster_folder,
     intensity_band_dict=intensity_band_dict,
     pkl_folder=pkl_folder,                      # carpeta con los .pkl
     output_tif=out_tif,
-    fig_title='Biomass prediction map using LGBM'
+    fig_title='Tree height prediction map using Nadaraya-Watson'
 )
 
-# res['figure'] es la figura; 'Predicted_biomass_LGBM.tif' se abre en QGIS.
+# res['figure'] es la figura; 'Predicted_tree_height_NW.tif' se abre en QGIS.
