@@ -158,12 +158,12 @@ def predict_canopy_from_ratios(
     im = ax.imshow(pred_map, extent=[left, right, bottom, top], origin='upper', cmap=cmap)
     cb = plt.colorbar(im, ax=ax, shrink=0.85)
     cb.set_label(f'Predicted {target_variable} [kg/$m^3$]')
-    ax.set_xlabel(f'X ({crs})')
-    ax.set_ylabel(f'Y ({crs})')
+    ax.set_xlabel(f'Longitude ({crs})')
+    ax.set_ylabel(f'Latitude ({crs})')
     # redondear ejes
     ax.set_xticklabels(np.round(ax.get_xticks(), 3), rotation=45)
     ax.set_yticklabels(np.round(ax.get_yticks(), 3))
-    ax.set_title(fig_title or f'{target_variable} prediction map')
+    ax.set_title(fig_title or f'{target_variable} prediction')
     plt.tight_layout()
     plt.savefig(output_tif.replace('.tif', '.pdf'), format='pdf')
 
@@ -195,15 +195,15 @@ intensity_band_dict = {
     }
 
 raster_folder = r'C:\Users\mramoso\Documents\SARVeg\data\raw\SAR\intensities.tif'
-pkl_folder = r'C:\Users\mramoso\Documents\SARVeg\results\canopy\artifacts_rf\pkl'
-out_tif = r'C:\Users\mramoso\Documents\SARVeg\results\maps\Predicted_biomass.tif'
+pkl_folder = r'C:\Users\mramoso\Documents\SARVeg\results\canopy\artifacts_lgbm\pkl'
+out_tif = r'C:\Users\mramoso\Documents\SARVeg\results\maps\Predicted_biomass_LGBM.tif'
 res = predict_canopy_from_ratios(
     target_variable='biomass',                 # texto que aparece en el nombre del .pkl
     intensity_raster_path=raster_folder,
     intensity_band_dict=intensity_band_dict,
     pkl_folder=pkl_folder,                      # carpeta con los .pkl
     output_tif=out_tif,
-    fig_title='Biomass prediction map'
+    fig_title='Biomass prediction map using LGBM'
 )
 
-# res['figure'] es la figura; 'Predicted_biomass.tif' se abre en QGIS.
+# res['figure'] es la figura; 'Predicted_biomass_LGBM.tif' se abre en QGIS.

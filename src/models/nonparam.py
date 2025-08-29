@@ -232,6 +232,12 @@ def run_nw_from_splits(
     plot_diagnostics(y_train.values, yhat_train, outdir, f"train set - NW", target_col)
     plot_diagnostics(y_val.values,   yhat_val,   outdir, f"val set - NW", target_col)
 
+    # 7) Guardar el modelo entrenado
+    import joblib
+    dir_pkl = pathlib.Path(outdir) / "pkl"
+    dir_pkl.mkdir(parents=True, exist_ok=True)
+    joblib.dump(model, dir_pkl / f"nw_model_{target_col}.pkl")
+
     return metrics
 
 
