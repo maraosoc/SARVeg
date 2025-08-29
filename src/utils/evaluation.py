@@ -155,3 +155,56 @@ def gather_model_metrics(base_dir: str, grass_variables=None, model_folders=None
     # Ordenar
     df_long = df_long[['model', 'target', 'metric', 'set', 'value']]
     return df_long
+
+
+def create_metrics_table(
+    df: pd.DataFrame,
+    export_to_latex: bool = False,
+    filepath: str = "latex_metrics_table.txt"
+) -> pd.DataFrame:
+    """
+    Filtra, pivotea y exporta un DataFrame de métricas en formato LaTeX.
+    Args:
+        df: DataFrame original con columnas ['model', 'target', 'set', 'metric', 'value']
+        metrics_of_interest: lista de métricas a incluir (ej: ['MAE', 'R2', 'rRMSE(%)'])
+        export_to_latex: si True, exporta la tabla a formato LaTeX en filepath
+        filepath: ruta de salida para el archivo .txt
+    Returns:
+        DataFrame pivotado y redondeado
+    """
+    # Definir metricas de interés
+    metrics_of_interest = ['MAE', 'R2', 'rRMSE(%)']
+    # Filtrar métricas
+    df_filtered = df[df['metric'].isin(metrics_of_interest)]
+    # Pivotear
+    pivot = df_filtered.pivot_table(
+        index=['model', 'target'],
+        columns=['set', 'metric'],
+        values='value'
+    ).reset_index()
+    # Renombrar columnas (ajustar según orden real)
+    pivot.columns = [
+        'Model', 'Target',
+        'MAE (train)', 'R2 (train)', 'rRMSE% (train)',
+        'MAE (val)', 'R2 (val)', 'rRMSE% (val)'
+    ]
+    # Reordenar columnas
+    pivot = pivot[['Model', 'Target',
+                   'MAE (train)', 'MAE (val)',
+                   'R2 (train)', 'R2 (val)',
+                   'rRMSE% (train)', 'rRMSE% (val)']]
+    # Redondear
+    pivot = pivot.round(2)
+
+    # Exportar a LaTeX si se solicita
+    if export_to_latex:
+        with open(filepath, 'w', encoding='utf-8') as f:
+            header = ' & '.join(pivot.columns) + r' \\'
+            f.write(header + '\n')
+            for _, row in pivot.iterrows():
+                line = ' & '.join(map(str, row.values)) + r' \\'
+                f.write(line + '\n')
+    return pivot
+
+# Ejemplo de uso:
+# tabla = create_metrics_table(metrics_grass, ['MAE', 'R2', 'rRMSE(%)'], export_to_latex=
