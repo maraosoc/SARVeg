@@ -12,6 +12,7 @@ plt.set_cmap("Paired")
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
 import seaborn as sns
+from pathlib import Path
 
 
 def run_pca(X: np.ndarray, sar_cols: list, n_components: int = None):
@@ -70,3 +71,52 @@ def rf_feature_importance(X: np.ndarray, y: np.ndarray, sar_cols: list, target_c
             plt.show()
     
     return importance_dict
+
+# Funcion para graficar feature importance en un solo grafico de barras
+def plot_total_rf_importances(rf_importances: dict, 
+                        palette: dict = None, 
+                        figsize: tuple = (9,10), 
+                        title: str = 'SAR importance per grass target',
+                        xlabel: str = 'Relative importance',
+                        ylabel: str = 'SAR variable',
+                        legend_title: str = 'Grass target',
+                        save_path: Path = None):
+    """
+    Grafica las importancias de variables SAR por cada variable de pasto (Random Forest).
+
+    Args:
+        rf_importances: diccionario de diccionarios {variable_vegetal: {variable_SAR: importancia}}.
+        palette: diccionario con colores para cada variable de pasto.
+        figsize: tupla para tamaño de figura (ancho, alto).
+        title: título del gráfico.
+        xlabel: etiqueta eje X.
+        ylabel: etiqueta eje Y.
+        legend_title: título de la leyenda.
+        save_path: Path o str donde guardar el PDF, opcional.
+    """
+    # Convertir a DataFrame largo
+    rows = []
+    for veg_var, sar_dict in rf_importances.items():
+        for sar_var, imp in sar_dict.items():
+            rows.append({'VariableVegetal': veg_var, 'VariableSAR': sar_var, 'Importancia': imp})
+    df_rf = pd.DataFrame(rows)
+    
+    # Crear el gráfico
+    plt.figure(figsize=figsize)
+    sns.barplot(x='Importancia', y='VariableSAR', hue='VariableVegetal', data=df_rf, palette=palette)
+    
+    plt.title(title)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.legend(title=legend_title, loc="lower right", frameon=True, facecolor='white', edgecolor='black')
+    plt.tight_layout()
+    
+    # Guardar PDF si se indica
+    if save_path:
+        if isinstance(save_path, (str, Path)):
+            save_path = Path(save_path)
+            plt.savefig(save_path)
+        else:
+            raise TypeError("save_path must be a str or pathlib.Path object")
+    
+    plt.show()
