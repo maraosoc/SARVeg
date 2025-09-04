@@ -1,10 +1,12 @@
 import numpy as np
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+import seaborn as sns
 from typing import List, Optional, Dict, Tuple
 import pathlib
 from pathlib import Path
 import matplotlib.pyplot as plt
 import pandas as pd
+from utils.model_prep import ensure_outdir
 # Gráficos más estéticos
 plt.style.use("seaborn-v0_8-whitegrid")
 # Cambiar estilo de la letra
@@ -206,5 +208,75 @@ def create_metrics_table(
                 f.write(line + '\n')
     return pivot
 
-# Ejemplo de uso:
-# tabla = create_metrics_table(metrics_grass, ['MAE', 'R2', 'rRMSE(%)'], export_to_latex=
+def plot_metric_by_model(df_metrics: pd.DataFrame, metric: str, ylabel: str, palette: dict = None, figsize: tuple = (8, 5), output_dir: str = "results/figures"):
+    """
+    Genera gráficos de barras de MAE por modelo para cada variable.
+    Compara train y val.
+
+    Parámetros
+    ----------
+    df_metrics : pd.DataFrame
+        DataFrame largo con columnas: ['model', 'target', 'metric', 'set', 'value']
+    output_dir : str
+        Carpeta donde se guardarán los gráficos.
+    """
+    output_dir = Path(output_dir)
+    ensure_outdir(output_dir)
+
+    # Filtrar solo la métrica MAE
+    df_mae = df_metrics[df_metrics['metric'] == metric]
+
+    if palette is None:
+        # Definir paleta de colores por defecto
+        my_palette = {'train': 'steelblue', 'val': 'orange'}
+    else:
+        my_palette = palette
+
+    # Iterar por variable (target)
+    for target_var in df_mae['target'].unique():
+        df_var = df_mae[df_mae['target'] == target_var]
+
+        plt.figure(figsize=figsize)
+        sns.barplot(
+            x='model', y='value', hue='set', data=df_var,
+            palette=my_palette 
+        )
+        plt.title(f'MAE Comparison for {target_var}')
+        plt.ylabel(ylabel)
+        plt.xlabel('Model')
+        plt.legend(title='Set', loc='upper left', bbox_to_anchor=(1.05, 1), borderaxespad=0.)
+        plt.xticks(rotation=30)
+        plt.tight_layout()
+        
+        # Guardar figura si se requiere
+        if output_dir:
+            plt.savefig(output_dir / f'{ylabel}_{target_var}.pdf', format='pdf')
+
+        plt.show()
+        plt.close()
+
+def plot_mean_metrics(mean_metrics: pd.DataFrame, figsize: tuple = (10, 6), output_dir: str = "results/figures", my_palette: dict = None):
+    """
+    Genera gráficos de barras para las métricas medias por modelo y variable objetivo.
+
+    Parámetros
+    ----------
+    mean_metrics : pd.DataFrame
+        DataFrame con las métricas medias.
+    """
+    if my_palette is None:
+        my_palette = {'rRMSE%(train)': 'steelblue', 'rRMSE%(val)': 'orange'}
+    mean_metrics_rmse = mean_metrics.filter(like='RMSE%')
+    mean_metrics_rmse.plot(kind='bar', figsize=figsize, color=my_palette.values())
+    plt.title('Mean rRMSE% by Model')
+    plt.ylabel('Mean rRMSE%')
+    plt.xlabel('Model')
+    plt.xticks(rotation=30)
+    plt.legend(title='Set', bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.tight_layout()
+    if output_dir:
+        output_dir = Path(output_dir)
+        ensure_outdir(output_dir)
+        plt.savefig(output_dir / 'mean_rRMSE_comparison.pdf', format='pdf')
+    plt.show()
+    plt.close()
